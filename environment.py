@@ -2,20 +2,16 @@
 A simple tic-tac-toe game environment designed for RL experiments.
 Inspired by gym environments, it returns a tuple of (state, reward, is_done) each step by an action.
 """
-from typing import Tuple
+import random
+from itertools import product
+from typing import Tuple, List
 
 import numpy as np
-from dataclasses import dataclass
 
-
-@dataclass
-class EnvResult:
-    """
-    The result of a step in the environment: the new state, the reward and is_done boolean flag.
-    """
-    state: np.ndarray
-    reward: int
-    is_done: bool
+State = np.ndarray
+Reward = int
+IsDone = bool
+EnvResult = Tuple[State, Reward, IsDone]
 
 class TicTacToeEnv:
 
@@ -30,13 +26,13 @@ class TicTacToeEnv:
         Resets and initiates the board
         :return:
         """
-        self.board = np.zeros((3,3),dtype=int)
+        self.board[:] = 0
         self.is_done = False
         self.current_player = np.random.randint(1,3)  # 1 for the environment, 2 for the RL agent
-        if self.current_player == 1: # If it's the environment's turn, let it play a step
-            return self.step()
         self.reward = 0
-        return EnvResult(self.board,self.reward,self.is_done)
+        if self.current_player == 1: # If it's the environment's turn, let it play a step
+            self._env_action()
+        return self.board,self.reward,self.is_done
 
     def step(self,action: int) -> EnvResult:
         """
@@ -46,15 +42,25 @@ class TicTacToeEnv:
         :return:
         """
         self._mark(action)
-        self._env_action()
-        return EnvResult(self.board, self.reward, self.is_done)
+        if not self.is_done:
+            self._env_action()
+        return self.board,self.reward,self.is_done
 
+    def generate_all_states(self):
+        states: List[np.ndarray] = []
+        for cells in product((0,1,2),repeat=9):
+            board = np.array(cells).reshape(3,3)
+            count_x = np.sum(board == 1)
+            count_o = np.sum(board == 2)
+            if abs(count_x - count_o) <= 1:
+                states.append(board)
+        return states
 
 
     def _check_done(self) -> int:
         """
         checks if the game is over.
-        :return: -2 if the environment won, 1 if the agent won, 0 if it's ongoing and -1 if the game is a tie.
+        :return: --1 if the environment won, 1 if the agent won, 0 if it's ongoing or a tie.
         """
 
         #checking rows and columns
@@ -62,28 +68,29 @@ class TicTacToeEnv:
             if np.all(self.board[i,:] == 1):
                 return 1
             if np.all(self.board[i,:] == 2):
-                return -2
+                return -1
 
             if np.all(self.board[:,i] == 1):
                 return 1
             if np.all(self.board[:,i] == 2):
-                return -2
+                return -1
 
         #checking diagonals
         if np.all(np.diag(self.board) == 1):
             return 1
         if np.all(np.diag(self.board) == 2):
-            return -2
+            return -1
 
         if np.all(np.diag(np.fliplr(self.board)) == 1):
             return 1
         if np.all(np.diag(np.fliplr(self.board)) == 2):
-            return -2
+            return -1
 
         # checking if all cells are filled
-        if np.any(self.board == 0):
-            return 0
-        return -1
+        # if np.any(self.board == 0):
+        #     return 0
+        # return -1
+        return 0
 
 
 
@@ -94,12 +101,10 @@ class TicTacToeEnv:
         """
         if self.is_done:
             return
-        while True:
-            choice = np.random.randint(0,10)
-            if self._is_legal(choice):
-                self._mark(choice)
-                break
-
+        choice = np.random.randint(0,9)
+        while not self._is_legal(choice):
+            choice = np.random.randint(0,9)
+        self._mark(choice)
 
     def _is_legal(self,action: int) -> bool:
         """
@@ -116,11 +121,22 @@ class TicTacToeEnv:
         :param action: an Integer that represents the position of board that is getting marked.
         """
         if not self._is_legal(action):
-            self.reward = -10
+            self.reward = -1
             self.is_done = True
         else:
             row, col = divmod(action, 3)
             self.board[row, col] = self.current_player
             self.current_player = 1 if self.current_player == 2 else 2
             self.reward = self._check_done()
-            self.is_done = False
+            self.is_done = (self.reward != 0) or not np.any(self.board == 0)
+
+    def __str__(self):
+        """
+        :return: The string representation of the board. X indicates the player marks and O indicates the opponent marks.
+        """
+        board_str = ""
+        for row in self.board:
+            board_str += " | ".join(['X' if cell == 2 else 'O' if cell == 1 else '.' for cell in row]) + "\n"
+            board_str += "-" * 9 + "\n"  # Line separator between rows
+
+        return board_str.strip()  # Remove the last separator line.
