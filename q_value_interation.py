@@ -1,3 +1,4 @@
+import pickle
 from typing import Tuple, Dict
 from collections import Counter, defaultdict
 
@@ -84,6 +85,19 @@ class TicTacToeAgent:
             action_vals = [self.calc_action_value(state, action) for action in range(9)]
             self.values[state] = max(action_vals) if action_vals else 0.0
 
+    def extract_q_table(self):
+        """
+        Returns a dict mapping (state_tuple, action) → Q-value,
+        where state_tuple is a 9-int tuple of the board, and
+        action is in 0…8.
+        """
+        q_table = {}
+        for board in self.env.generate_all_states():
+            s = tuple(board.flatten())
+            for a in range(9):
+                q_table[(s, a)] = self.calc_action_value(s, a)
+        return q_table
+
 if __name__ == "__main__":
     agent = TicTacToeAgent()
     writer = SummaryWriter(comment="tic-tac-toe-q")
@@ -106,8 +120,13 @@ if __name__ == "__main__":
             print(f"Iter {iter_no}: new best avg reward {avg_reward:.3f}")
             best_reward = avg_reward
         if best_reward >= 1.0:
-            print("Solved!")
-            print(agent.env)
+            print("Training complete.")
+            q_table = agent.extract_q_table()
+            with open("ttt_q_table.pkl", "wb") as f:
+                pickle.dump(q_table, f)
+            print("q values of the model extracted into ttt_tables.pkl")
             break
 
     writer.close()
+
+
